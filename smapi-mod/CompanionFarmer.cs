@@ -50,7 +50,18 @@ namespace StardewMCPBridge
                 this.Shadow.Items.Add(null);
 
             this.SyncFromNpc();
-            this.monitor.Log($"Shadow farmer created for {name}", LogLevel.Info);
+
+            // Register in otherFarmers for location activation + game mechanics
+            Game1.otherFarmers[this.Shadow.UniqueMultiplayerID] = this.Shadow;
+
+            this.monitor.Log($"Shadow farmer created for {name} (UID: {this.Shadow.UniqueMultiplayerID}, registered in otherFarmers)", LogLevel.Info);
+        }
+
+        /// <summary>Unregister from otherFarmers on cleanup.</summary>
+        public void Unregister()
+        {
+            Game1.otherFarmers.Remove(this.Shadow.UniqueMultiplayerID);
+            this.monitor.Log($"Shadow farmer {this.Name} unregistered from otherFarmers", LogLevel.Info);
         }
 
         /// <summary>Sync shadow farmer position/location from the visible NPC.</summary>
@@ -333,6 +344,40 @@ namespace StardewMCPBridge
         public float GetStaminaPercent()
         {
             return this.Shadow.Stamina / this.Shadow.MaxStamina * 100f;
+        }
+
+        /// <summary>Scan the companion's surroundings for bridge data.</summary>
+        public ScanResult GetSurroundings(int radius = 8)
+        {
+            var location = this.Visual.currentLocation ?? Game1.player?.currentLocation;
+            if (location == null) return null;
+            return SurroundingsScanner.Scan(location, this.Visual.Tile, radius);
+        }
+
+        /// <summary>Get inventory as serializable list for bridge data.</summary>
+        public List<object> GetInventoryData()
+        {
+            var items = new List<object>();
+            foreach (var item in this.Shadow.Items)
+            {
+                if (item != null)
+                {
+                    items.Add(new
+                    {
+                        name = item.DisplayName ?? item.Name,
+                        stack = item.Stack,
+                        type = item is Tool ? "tool" : "item",
+                        qualifiedId = item.QualifiedItemId
+                    });
+                }
+            }
+            return items;
+        }
+
+        /// <summary>Signal sleep readiness for day transition.</summary>
+        public void SignalSleepReady()
+        {
+            this.Shadow.SignalSleepReady();
         }
 
     }

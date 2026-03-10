@@ -1,18 +1,25 @@
 using System;
 using Microsoft.Xna.Framework;
+using Microsoft.Xna.Framework.Graphics;
 using StardewValley;
 
 namespace StardewMCPBridge
 {
     /// <summary>
     /// A Farmer subclass that serves as an AI-controlled farmhand.
-    /// Registered in Game1.otherFarmers to be treated as a real Player 2/3.
-    /// Handles movement, day transitions, and game mechanic interactions.
+    /// Registered in Game1.otherFarmers for location activation + game mechanics.
+    /// Invisible — the paired NPC handles all rendering.
     /// </summary>
     public class BotFarmer : Farmer
     {
         /// <summary>Marks this farmer as AI-controlled (not a real player).</summary>
         public bool IsBot { get; } = true;
+
+        /// <summary>Prevent the shadow farmer from rendering — the NPC sprite is the visual.</summary>
+        public override void draw(SpriteBatch b)
+        {
+            // No-op: companion NPC handles all rendering
+        }
 
         public override void SetMovingUp(bool b)
         {
@@ -70,6 +77,12 @@ namespace StardewMCPBridge
             this.sleptInTemporaryBed.Value = false;
             this.Stamina = this.MaxStamina;
             this.health = this.maxHealth;
+        }
+
+        /// <summary>Signal that this bot is ready for sleep/end-of-day. Prevents deadlock.</summary>
+        public void SignalSleepReady()
+        {
+            this.isInBed.Value = true;
         }
     }
 }

@@ -18,7 +18,8 @@ namespace StardewMCPBridge
         Farm,           // Autonomous farming (water, harvest, clear)
         Mine,           // Go to mines, fight, break rocks
         Fish,           // Find water, fish
-        Idle            // Stay put
+        Idle,           // Stay put
+        Player          // Direct control from MCP — AI tick does nothing
     }
 
     /// <summary>
@@ -40,6 +41,9 @@ namespace StardewMCPBridge
         private int fishingWaitTicks = 0;
         private int stuckTicks = 0;
         private Vector2 lastPosition = Vector2.Zero;
+
+        /// <summary>When true in Player mode, auto-attacks nearby monsters each tick.</summary>
+        public bool AutoCombat { get; set; } = false;
 
         public CompanionAI(CompanionFarmer companionFarmer, IMonitor monitor)
         {
@@ -73,6 +77,10 @@ namespace StardewMCPBridge
                     this.DoFish();
                     break;
                 case CompanionMode.Idle:
+                    break;
+                case CompanionMode.Player:
+                    // Direct MCP control — only sync position, no autonomous behavior
+                    this.DoPlayerMode();
                     break;
             }
         }
@@ -395,6 +403,49 @@ namespace StardewMCPBridge
         }
 
         // ====================
+        // PLAYER MODE (Direct MCP control)
+        // ====================
+
+        private void DoPlayerMode()
+        {
+            // Tick fishing rod if a cast is active
+            if (this.isFishing)
+            {
+                this.Companion.TickFishingRod();
+                if (this.Companion.CheckAndHookFish())
+                {
+                    this.isFishing = false;
+                    this.fishingWaitTicks = 0;
+                }
+                else
+                {
+                    this.fishingWaitTicks++;
+                    if (this.fishingWaitTicks > 300)
+                    {
+                        this.isFishing = false;
+                        this.fishingWaitTicks = 0;
+                    }
+                }
+            }
+
+            // Auto-combat toggle: attack nearby monsters when enabled
+            if (this.AutoCombat && this.IsInCombatArea())
+                this.Companion.AttackNearbyMonsters();
+        }
+
+        /// <summary>Start fishing (called by MCP cast_fishing_rod command).</summary>
+        public bool StartFishing()
+        {
+            if (this.Companion.CastFishingRod())
+            {
+                this.isFishing = true;
+                this.fishingWaitTicks = 0;
+                return true;
+            }
+            return false;
+        }
+
+        // ====================
         // HELPERS
         // ====================
 
@@ -448,9 +499,13 @@ namespace StardewMCPBridge
         public string GetStatusDescription()
         {
             string mode = this.Mode.ToString().ToLower();
-            string task = this.currentTarget.HasValue
-                ? $"heading to ({this.currentTarget.Value.X},{this.currentTarget.Value.Y})"
-                : this.isFishing ? "fishing" : "scanning";
+            string task;
+            if (this.Mode == CompanionMode.Player)
+                task = this.isFishing ? "fishing" : this.AutoCombat ? "auto-combat" : "awaiting command";
+            else
+                task = this.currentTarget.HasValue
+                    ? $"heading to ({this.currentTarget.Value.X},{this.currentTarget.Value.Y})"
+                    : this.isFishing ? "fishing" : "scanning";
             float stamina = this.Companion.GetStaminaPercent();
             return $"{mode}: {task} (stamina: {stamina:F0}%)";
         }

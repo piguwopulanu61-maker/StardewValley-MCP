@@ -1,8 +1,8 @@
 # Stardew MCP Bridge
 
-AI companions for Stardew Valley, controlled through the [Model Context Protocol](https://modelcontextprotocol.io). Spawn one or more autonomous NPC companions with custom sprites that can follow the player, farm, mine, fish, and fight — all driven by MCP tool calls from an AI agent.
+AI companions for Stardew Valley, controlled through the [Model Context Protocol](https://modelcontextprotocol.io). Spawn companions as **Player 2/3** with custom sprites — directly controlled by an AI agent through MCP tool calls. Move, use tools, fight, fish, farm, explore mines, open chests, and interact with the world as a real player.
 
-![Companions in-game](images/companions-ingame.png)
+Also supports autonomous modes (follow, farm, mine, fish) for hands-off play.
 
 ## Architecture
 
@@ -18,16 +18,16 @@ AI companions for Stardew Valley, controlled through the [Model Context Protocol
                                                               └──────────────┘
 ```
 
-**SMAPI Mod** (`smapi-mod/`): Runs inside the game. Spawns companion NPCs with shadow `Farmer` instances for game mechanics (tools, combat, fishing). Writes game state to `bridge_data.json`, reads commands from `actions.json`.
+**SMAPI Mod** (`smapi-mod/`): Runs inside the game. Spawns companion NPCs paired with shadow `Farmer` instances registered in `Game1.otherFarmers`. The shadow farmer handles all game mechanics (tools, combat, fishing, inventory) while the NPC provides the visible custom sprite. Writes game state to `bridge_data.json`, reads commands from `actions.json`.
 
-**MCP Server** (`mcp-server/`): Exposes 13 tools over stdio transport. Reads game state and sends commands by reading/writing the bridge JSON files.
+**MCP Server** (`mcp-server/`): Exposes 25 tools over stdio transport. 13 global tools for mode-based control + 12 Player mode tools for direct companion control.
 
 ## Companion System
 
 Each companion is a visible NPC paired with a hidden "shadow farmer" that handles game mechanics:
 
 - **NPC** — Custom sprite, pathfinding, visible to the player
-- **Shadow Farmer** — Extends `Farmer` class, holds tools/inventory, performs tool use, combat, and fishing through actual game APIs
+- **Shadow Farmer** — Extends `Farmer` class, registered in `Game1.otherFarmers` for location activation. Holds tools/inventory, performs tool use, combat, and fishing through actual game APIs. Invisible (draw is no-op).
 
 ### Modes
 
@@ -38,8 +38,22 @@ Each companion is a visible NPC paired with a hidden "shadow farmer" that handle
 | `mine` | Fight monsters, break rocks, seek ladders |
 | `fish` | Find water, cast rod, auto-hook fish |
 | `idle` | Stay in place |
+| **`player`** | **Direct MCP control — the AI IS Player 2** |
+
+### Player Mode
+
+In `player` mode, autonomous AI behavior is disabled. The companion is controlled entirely through MCP tool calls:
+
+1. **See** — `stardew_get_surroundings` returns tiles, objects, crops, monsters, NPCs in a radius
+2. **Move** — `stardew_move_to` pathfinds to a tile, `stardew_warp_companion` teleports to a location
+3. **Act** — `stardew_use_tool`, `stardew_interact`, `stardew_attack`, `stardew_cast_fishing_rod`
+4. **Toggle** — `stardew_set_auto_combat` for real-time combat (too fast for LLM round-trips)
+
+Bridge data includes per-companion surroundings, inventory, and last command results when in player mode.
 
 ## MCP Tools
+
+### Global Tools
 
 | Tool | Description |
 |------|-------------|
@@ -52,10 +66,27 @@ Each companion is a visible NPC paired with a hidden "shadow farmer" that handle
 | `stardew_fish` | Enable fishing mode |
 | `stardew_water_all` | Instantly water all unwatered crops |
 | `stardew_harvest_all` | Instantly harvest all ready crops |
-| `stardew_warp` | Warp companions to a location |
-| `stardew_set_mode` | Set an individual companion's mode |
+| `stardew_warp` | Warp all companions to a location |
+| `stardew_set_mode` | Set an individual companion's mode (including `player`) |
 | `stardew_chat` | Send a message to the game chat |
 | `stardew_action` | Send a custom action command |
+
+### Player Mode Tools (Direct Control)
+
+| Tool | Description |
+|------|-------------|
+| `stardew_get_surroundings` | See tiles, objects, crops, monsters, NPCs around the companion |
+| `stardew_get_inventory` | Get the companion's tools and items |
+| `stardew_get_companion_state` | Full companion state (position, health, stamina, surroundings, inventory) |
+| `stardew_move_to` | Walk to a tile via pathfinding |
+| `stardew_warp_companion` | Teleport a specific companion to a location |
+| `stardew_face_direction` | Turn to face a direction |
+| `stardew_use_tool` | Use pickaxe, axe, hoe, watering can, or sword at a tile |
+| `stardew_interact` | Interact with objects, crops, chests, ladders, NPCs |
+| `stardew_attack` | Attack nearest monster with equipped weapon |
+| `stardew_cast_fishing_rod` | Cast rod + auto-hook on nibble |
+| `stardew_set_auto_combat` | Toggle automatic monster attacks |
+| `stardew_eat_item` | Eat food from inventory |
 
 ## Setup
 
@@ -123,59 +154,71 @@ If you're running both from the repo directory, the env vars are optional — it
 1. Launch Stardew Valley with SMAPI
 2. Load a save
 3. Use `stardew_spawn` to bring companions into the world
-4. Set modes with `stardew_farm`, `stardew_mine`, `stardew_fish`, or `stardew_follow`
+4. **Autonomous**: Set modes with `stardew_farm`, `stardew_mine`, `stardew_fish`, or `stardew_follow`
+5. **Direct control**: Set `stardew_set_mode` to `player`, then use the Player mode tools
 
 ## Project Structure
 
 ```
 stardew-mcp-bridge/
 ├── smapi-mod/
-│   ├── ModEntry.cs           # SMAPI entry point, content pipeline, bridge I/O
-│   ├── BotManager.cs         # Companion lifecycle, action routing
-│   ├── CompanionAI.cs        # AI behavior system (follow/farm/mine/fish/idle)
-│   ├── CompanionFarmer.cs    # NPC + shadow farmer pairing, tool/combat/fishing
-│   ├── CompanionActions.cs   # Direct tile manipulation (water/harvest/clear/hoe)
-│   ├── BotFarmer.cs          # Shadow Farmer subclass for game mechanics
-│   ├── manifest.json         # SMAPI mod manifest
+│   ├── ModEntry.cs              # SMAPI entry point, content pipeline, bridge I/O, sleep hooks
+│   ├── BotManager.cs            # Companion lifecycle, action routing, direct control commands
+│   ├── CompanionAI.cs           # AI behavior system (follow/farm/mine/fish/idle/player)
+│   ├── CompanionFarmer.cs       # NPC + shadow farmer pairing, tool/combat/fishing, otherFarmers registration
+│   ├── CompanionActions.cs      # Direct tile manipulation (water/harvest/clear/hoe)
+│   ├── BotFarmer.cs             # Shadow Farmer subclass (invisible, registered as Player 2/3)
+│   ├── SurroundingsScanner.cs   # Tile scanner — the companion's "eyes"
+│   ├── manifest.json            # SMAPI mod manifest
 │   ├── StardewMCPBridge.csproj
-│   └── assets/               # Sprites and portraits
+│   └── assets/                  # Sprites and portraits
 ├── mcp-server/
-│   ├── src/index.ts          # MCP server with 13 tools
+│   ├── src/index.ts             # MCP server with 25 tools
 │   ├── package.json
 │   └── tsconfig.json
 ├── .gitignore
 └── README.md
 ```
 
+## Notes (v0.3.0)
 
-## Notes (v0.2.1)
+### Player 2 Feature (New)
 
-Recent fixes and improvements:
+- **Shadow farmer registration** — BotFarmer registered in `Game1.otherFarmers` for location activation and game mechanics
+- **Invisible shadow farmer** — `draw()` is a no-op; the NPC sprite handles all rendering
+- **Sleep sync** — Bot farmers auto-signal sleep readiness on day end and at 2 AM to prevent deadlocks
+- **Player mode** — New `CompanionMode.Player` disables autonomous AI; all control comes from MCP
+- **Surroundings scanner** — Scans tiles, objects, crops, monsters, NPCs in a radius around the companion
+- **12 direct control tools** — move, warp, face, use tool, interact, attack, fish, eat, auto-combat toggle
+- **Per-companion bridge data** — Player mode companions include surroundings, inventory, and command results in bridge_data.json
+- **Command results** — Each command returns success/failure + detail, available in next bridge sync
+- **Auto-combat toggle** — Real-time combat automation for when LLM round-trips are too slow
+- **Auto-hook fishing** — Cast rod via MCP, nibble detection + hook happens automatically
 
-- **AI tick rate fix** — AI now runs at 60 ticks/sec (was throttled to 2/sec). Combat, pathfinding, and stuck detection are responsive now.
-- **Atomic file writes (both directions)** — Both SMAPI and MCP use temp-file-then-rename, preventing partial JSON reads.
-- **Action file race fix** — SMAPI deletes the action file before processing, so new MCP commands are never lost.
-- **Fishing rod lifecycle** — Rod state machine is ticked each frame during fishing, so nibble detection actually works.
-- **Single-tile actions** — stardew_action tool now works: water, harvest, clear, hoe route to actual game logic.
-- **WarpTo clears pathfinding** — Warping clears stale PathFindController references.
-- **Debris drops resources** — Clearing debris calls performRemoveAction() so items actually drop.
-- **Storm weather** — Bridge data reports thunderstorms separately from rain.
-- **Farm mode freeze fix** — Stuck detection (2s) auto-retargets to the next task.
-- **Mine mode ladder descent** — Companions actually descend mine levels.
-- **Fishing timeout** — Auto-resets after ~5 seconds with no bite.
-- **Crash isolation** — Per-companion error recovery in tick loop.
-- **Shadow farmer sync** — Syncs from NPC every tick, preventing desync.
-- **Day transition safety** — Warps from mines at day end, resets mode to Follow.
-- **Input validation** — MCP tools validate required arguments before sending.
-- **Dead code cleanup** — Removed unused GoToBed, MoveTowardPosition, Rest methods.
+### Previous Fixes (v0.2.1)
+
+- AI tick rate fix (60/sec, was 2/sec)
+- Atomic file writes both directions
+- Action file race fix
+- Fishing rod lifecycle
+- Single-tile actions
+- WarpTo clears pathfinding
+- Debris drops resources
+- Storm weather reporting
+- Farm mode stuck detection
+- Mine mode ladder descent
+- Fishing timeout
+- Per-companion crash isolation
+- Shadow farmer sync every tick
+- Day transition safety
+- Input validation
+- Dead code cleanup
 
 ## License
 
 MIT
 
 ## Credits
-Idea was inspired by [Sparks✨️] (@sparks_qac on discord)
-(https://github.com/SparksQACR)
 
 Built with Antigravity & Claude Code — Kai & Lucian, with Mai.
 
@@ -187,6 +230,6 @@ Shadow farmer pattern inspired by [Farmtronics](https://github.com/JoeStrout/Far
 
  ## Support
 
-  If this helped you, consider supporting my work ☕
+  If this helped you, consider supporting my work
 
   [![Ko-fi](https://img.shields.io/badge/Ko--fi-Support%20Me-FF5E5B?style=flat&logo=ko-fi&logoColor=white)](https://ko-fi.com/maii983083)

@@ -29,6 +29,8 @@ namespace StardewMCPBridge
             helper.Events.GameLoop.GameLaunched += this.OnGameLaunched;
             helper.Events.GameLoop.UpdateTicked += this.OnUpdateTicked;
             helper.Events.GameLoop.DayStarted += this.OnDayStarted;
+            helper.Events.GameLoop.DayEnding += this.OnDayEnding;
+            helper.Events.GameLoop.TimeChanged += this.OnTimeChanged;
             helper.Events.GameLoop.ReturnedToTitle += this.OnReturnedToTitle;
             helper.Events.Content.AssetRequested += this.OnAssetRequested;
 
@@ -105,6 +107,20 @@ namespace StardewMCPBridge
                 this.SyncGameState();
                 this.ProcessActions();
             }
+        }
+
+        private void OnTimeChanged(object sender, TimeChangedEventArgs e)
+        {
+            // Safety net: if it's 2:00 AM (forced pass-out time), signal bots ready
+            if (e.NewTime >= 2600)
+                this.botManager.SignalAllSleepReady();
+        }
+
+        private void OnDayEnding(object sender, DayEndingEventArgs e)
+        {
+            // Signal all bot farmers as sleep-ready so the game doesn't deadlock
+            this.botManager.SignalAllSleepReady();
+            this.Monitor.Log("Day ending: bot farmers signaled sleep ready", LogLevel.Debug);
         }
 
         private void OnDayStarted(object sender, DayStartedEventArgs e)

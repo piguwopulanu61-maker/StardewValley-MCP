@@ -28,6 +28,26 @@ function readBridge(): string {
     return '{"error": "Bridge file not found. Is the SMAPI mod running?"}';
 }
 
+// Helper to read companion state from bridge data
+function getCompanionState(companionName: string): string {
+    const raw = readBridge();
+    try {
+        const data = JSON.parse(raw);
+        if (data.companions) {
+            const companion = (data.companions as any[]).find((c: any) => c.name === companionName);
+            if (companion) return JSON.stringify(companion, null, 2);
+        }
+        return `Companion "${companionName}" not found in bridge data.`;
+    } catch {
+        return raw;
+    }
+}
+
+const COMPANION_ENUM = ["Companion1", "Companion2"];
+const MODE_ENUM = ["follow", "farm", "mine", "fish", "idle", "player"];
+const TOOL_ENUM = ["pickaxe", "axe", "hoe", "watering_can", "sword"];
+const DIRECTION_DESC = "0=up, 1=right, 2=down, 3=left";
+
 class StardewBridgeServer {
     private server: Server;
 
@@ -35,7 +55,7 @@ class StardewBridgeServer {
         this.server = new Server(
             {
                 name: "stardew-mcp-bridge",
-                version: "0.2.0",
+                version: "0.3.0",
             },
             {
                 capabilities: {
@@ -50,125 +70,249 @@ class StardewBridgeServer {
     private setupHandlers() {
         this.server.setRequestHandler(ListToolsRequestSchema, async () => ({
             tools: [
+                // ============================
+                // GLOBAL TOOLS (existing)
+                // ============================
                 {
                     name: "stardew_get_state",
                     description: "Get current game state — time, weather, location, player stats, companion status, nearby NPCs.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_spawn",
-                    description: "Spawn companions into the game world near the player. They will automatically follow her.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    description: "Spawn companions into the game world near the player.",
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_follow",
-                    description: "Make companions follow the player around. They will warp between locations with her.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    description: "Make all companions follow the player.",
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_stay",
-                    description: "Make companions stop and stay at their current position.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    description: "Make all companions stop and stay at their current position.",
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_farm",
-                    description: "Enable auto-farm mode. companions will autonomously scan for farm tasks (watering, harvesting, clearing debris) and do them.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    description: "Enable auto-farm mode for all companions.",
+                    inputSchema: { type: "object", properties: {} },
+                },
+                {
+                    name: "stardew_mine",
+                    description: "Enable combat/mining mode for all companions.",
+                    inputSchema: { type: "object", properties: {} },
+                },
+                {
+                    name: "stardew_fish",
+                    description: "Enable fishing mode for all companions.",
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_water_all",
                     description: "Instantly water all unwatered crops in the current location.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_harvest_all",
                     description: "Instantly harvest all ready crops in the current location.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
+                    inputSchema: { type: "object", properties: {} },
                 },
                 {
                     name: "stardew_chat",
-                    description: "Send a chat message that appears in the game's chat box.",
+                    description: "Send a chat message in the game.",
                     inputSchema: {
                         type: "object",
-                        properties: {
-                            message: { type: "string", description: "The message to display in game." },
-                        },
+                        properties: { message: { type: "string" } },
                         required: ["message"],
                     },
                 },
                 {
-                    name: "stardew_mine",
-                    description: "Send companions into combat/mining mode. They will fight monsters, break rocks, and explore autonomously.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
-                },
-                {
-                    name: "stardew_fish",
-                    description: "Send companions into fishing mode. They will find water and fish autonomously.",
-                    inputSchema: {
-                        type: "object",
-                        properties: {},
-                    },
-                },
-                {
                     name: "stardew_warp",
-                    description: "Warp companions to a specific game location.",
+                    description: "Warp all companions to a location.",
                     inputSchema: {
                         type: "object",
                         properties: {
                             location: { type: "string", description: "Location name (Farm, Town, Mine, Beach, Forest, Mountain, etc.)." },
-                            x: { type: "number", description: "Tile X coordinate at destination." },
-                            y: { type: "number", description: "Tile Y coordinate at destination." },
+                            x: { type: "number", description: "Tile X." },
+                            y: { type: "number", description: "Tile Y." },
                         },
                         required: ["location", "x", "y"],
                     },
                 },
                 {
                     name: "stardew_set_mode",
-                    description: "Set a specific companion's mode independently. Modes: follow, farm, mine, fish, idle.",
+                    description: "Set a specific companion's mode. Modes: follow, farm, mine, fish, idle, player.",
                     inputSchema: {
                         type: "object",
                         properties: {
-                            target: { type: "string", enum: ["Companion1", "Companion2"], description: "Which companion." },
-                            mode: { type: "string", enum: ["follow", "farm", "mine", "fish", "idle"], description: "The mode to set." },
+                            target: { type: "string", enum: COMPANION_ENUM },
+                            mode: { type: "string", enum: MODE_ENUM },
                         },
                         required: ["target", "mode"],
                     },
                 },
                 {
                     name: "stardew_action",
-                    description: "Send a custom action command to the game. For advanced use.",
+                    description: "Send a custom action (water, harvest, clear, hoe) at a tile.",
                     inputSchema: {
                         type: "object",
                         properties: {
-                            actionType: { type: "string", description: "Action type (water, harvest, clear, hoe)." },
-                            x: { type: "number", description: "Tile X coordinate." },
-                            y: { type: "number", description: "Tile Y coordinate." },
+                            actionType: { type: "string" },
+                            x: { type: "number" },
+                            y: { type: "number" },
                         },
                         required: ["actionType"],
+                    },
+                },
+
+                // ============================
+                // PLAYER MODE — Direct Control
+                // ============================
+                {
+                    name: "stardew_get_surroundings",
+                    description: "Get what a companion can see — tiles, objects, crops, monsters, NPCs in a radius around them. The companion's 'eyes'. Companion must be in player mode.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM, description: "Which companion." },
+                            radius: { type: "number", description: "Scan radius in tiles (default 8)." },
+                        },
+                        required: ["companion"],
+                    },
+                },
+                {
+                    name: "stardew_get_inventory",
+                    description: "Get a companion's inventory — tools and items they're carrying.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                        },
+                        required: ["companion"],
+                    },
+                },
+                {
+                    name: "stardew_get_companion_state",
+                    description: "Get detailed state for a specific companion — position, location, health, stamina, mode, surroundings (if in player mode), inventory, last command result.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                        },
+                        required: ["companion"],
+                    },
+                },
+                {
+                    name: "stardew_move_to",
+                    description: "Move a companion to a tile via pathfinding. Async — check surroundings on next tick to see progress.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            x: { type: "number", description: "Target tile X." },
+                            y: { type: "number", description: "Target tile Y." },
+                        },
+                        required: ["companion", "x", "y"],
+                    },
+                },
+                {
+                    name: "stardew_warp_companion",
+                    description: "Teleport a specific companion to a named location.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            location: { type: "string", description: "Location name." },
+                            x: { type: "number", description: "Tile X." },
+                            y: { type: "number", description: "Tile Y." },
+                        },
+                        required: ["companion", "location", "x", "y"],
+                    },
+                },
+                {
+                    name: "stardew_face_direction",
+                    description: `Turn a companion to face a direction. ${DIRECTION_DESC}.`,
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            direction: { type: "number", description: DIRECTION_DESC },
+                        },
+                        required: ["companion", "direction"],
+                    },
+                },
+                {
+                    name: "stardew_use_tool",
+                    description: "Use a tool at a tile. Tools: pickaxe, axe, hoe, watering_can, sword.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            tool: { type: "string", enum: TOOL_ENUM },
+                            x: { type: "number", description: "Target tile X." },
+                            y: { type: "number", description: "Target tile Y." },
+                        },
+                        required: ["companion", "tool", "x", "y"],
+                    },
+                },
+                {
+                    name: "stardew_interact",
+                    description: "Interact with an object, crop, chest, ladder, or NPC at a tile.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            x: { type: "number", description: "Target tile X." },
+                            y: { type: "number", description: "Target tile Y." },
+                        },
+                        required: ["companion", "x", "y"],
+                    },
+                },
+                {
+                    name: "stardew_attack",
+                    description: "Attack the nearest monster with equipped weapon.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                        },
+                        required: ["companion"],
+                    },
+                },
+                {
+                    name: "stardew_cast_fishing_rod",
+                    description: "Cast the fishing rod and auto-hook when a fish bites. Companion must be near water.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                        },
+                        required: ["companion"],
+                    },
+                },
+                {
+                    name: "stardew_set_auto_combat",
+                    description: "Toggle auto-combat: when enabled, the companion automatically attacks nearby monsters each tick.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            enabled: { type: "boolean", description: "true to enable, false to disable." },
+                        },
+                        required: ["companion", "enabled"],
+                    },
+                },
+                {
+                    name: "stardew_eat_item",
+                    description: "Eat a food item from inventory to restore health/stamina.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", enum: COMPANION_ENUM },
+                            slot: { type: "number", description: "Inventory slot index (optional — picks first edible if omitted)." },
+                        },
+                        required: ["companion"],
                     },
                 },
             ],
@@ -176,69 +320,159 @@ class StardewBridgeServer {
 
         this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
             const { name, arguments: args } = request.params;
+            const a = (args || {}) as any;
 
             try {
+                // --- Global tools ---
                 switch (name) {
                     case "stardew_get_state":
-                        return { content: [{ type: "text", text: readBridge() }] };
+                        return ok(readBridge());
 
                     case "stardew_spawn":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "spawn" }) }] };
+                        return ok(sendAction({ actionType: "spawn" }));
 
                     case "stardew_follow":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "follow" }) }] };
+                        return ok(sendAction({ actionType: "follow" }));
 
                     case "stardew_stay":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "stay" }) }] };
+                        return ok(sendAction({ actionType: "stay" }));
 
                     case "stardew_farm":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "farm" }) }] };
+                        return ok(sendAction({ actionType: "farm" }));
 
                     case "stardew_water_all":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "water_all" }) }] };
+                        return ok(sendAction({ actionType: "water_all" }));
 
                     case "stardew_harvest_all":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "harvest_all" }) }] };
+                        return ok(sendAction({ actionType: "harvest_all" }));
 
                     case "stardew_mine":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "mine" }) }] };
+                        return ok(sendAction({ actionType: "mine" }));
 
                     case "stardew_fish":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "fish" }) }] };
+                        return ok(sendAction({ actionType: "fish" }));
 
-                    case "stardew_warp": {
-                        const a = args as any;
-                        if (!a?.location || a?.x == null || a?.y == null)
-                            return { content: [{ type: "text", text: "Error: location, x, and y are required." }] };
-                        return { content: [{ type: "text", text: sendAction({ actionType: "warp", location: a.location, x: a.x, y: a.y }) }] };
-                    }
+                    case "stardew_warp":
+                        if (!a.location || a.x == null || a.y == null)
+                            return err("location, x, and y are required.");
+                        return ok(sendAction({ actionType: "warp", location: a.location, x: a.x, y: a.y }));
 
-                    case "stardew_set_mode": {
-                        const a = args as any;
-                        if (!a?.target || !a?.mode)
-                            return { content: [{ type: "text", text: "Error: target and mode are required." }] };
-                        return { content: [{ type: "text", text: sendAction({ actionType: "set_mode", target: a.target, mode: a.mode }) }] };
-                    }
+                    case "stardew_set_mode":
+                        if (!a.target || !a.mode)
+                            return err("target and mode are required.");
+                        return ok(sendAction({ actionType: "set_mode", target: a.target, mode: a.mode }));
 
-                    case "stardew_chat": {
-                        const a = args as any;
-                        if (!a?.message)
-                            return { content: [{ type: "text", text: "Error: message is required." }] };
-                        return { content: [{ type: "text", text: sendAction({ actionType: "chat", metadata: { message: a.message } }) }] };
-                    }
+                    case "stardew_chat":
+                        if (!a.message)
+                            return err("message is required.");
+                        return ok(sendAction({ actionType: "chat", metadata: { message: a.message } }));
 
-                    case "stardew_action": {
-                        const a = args as any;
-                        if (!a?.actionType)
-                            return { content: [{ type: "text", text: "Error: actionType is required." }] };
-                        return { content: [{ type: "text", text: sendAction(a) }] };
-                    }
+                    case "stardew_action":
+                        if (!a.actionType)
+                            return err("actionType is required.");
+                        return ok(sendAction(a));
+
+                    // --- Player mode: companion-targeted commands ---
+                    case "stardew_get_surroundings":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(sendAction({
+                            actionType: "get_surroundings",
+                            companion: a.companion,
+                            radius: a.radius || 8,
+                        }));
+
+                    case "stardew_get_inventory":
+                        if (!a.companion) return err("companion is required.");
+                        // Read directly from bridge data
+                        return ok(getCompanionState(a.companion));
+
+                    case "stardew_get_companion_state":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(getCompanionState(a.companion));
+
+                    case "stardew_move_to":
+                        if (!a.companion || a.x == null || a.y == null)
+                            return err("companion, x, and y are required.");
+                        return ok(sendAction({
+                            actionType: "move_to",
+                            companion: a.companion,
+                            x: a.x, y: a.y,
+                        }));
+
+                    case "stardew_warp_companion":
+                        if (!a.companion || !a.location || a.x == null || a.y == null)
+                            return err("companion, location, x, and y are required.");
+                        return ok(sendAction({
+                            actionType: "warp_to",
+                            companion: a.companion,
+                            location: a.location,
+                            x: a.x, y: a.y,
+                        }));
+
+                    case "stardew_face_direction":
+                        if (!a.companion || a.direction == null)
+                            return err("companion and direction are required.");
+                        return ok(sendAction({
+                            actionType: "face_direction",
+                            companion: a.companion,
+                            direction: a.direction,
+                        }));
+
+                    case "stardew_use_tool":
+                        if (!a.companion || !a.tool || a.x == null || a.y == null)
+                            return err("companion, tool, x, and y are required.");
+                        return ok(sendAction({
+                            actionType: "use_tool",
+                            companion: a.companion,
+                            tool: a.tool,
+                            x: a.x, y: a.y,
+                        }));
+
+                    case "stardew_interact":
+                        if (!a.companion || a.x == null || a.y == null)
+                            return err("companion, x, and y are required.");
+                        return ok(sendAction({
+                            actionType: "interact",
+                            companion: a.companion,
+                            x: a.x, y: a.y,
+                        }));
+
+                    case "stardew_attack":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(sendAction({
+                            actionType: "attack",
+                            companion: a.companion,
+                        }));
+
+                    case "stardew_cast_fishing_rod":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(sendAction({
+                            actionType: "cast_fishing_rod",
+                            companion: a.companion,
+                        }));
+
+                    case "stardew_set_auto_combat":
+                        if (!a.companion || a.enabled == null)
+                            return err("companion and enabled are required.");
+                        return ok(sendAction({
+                            actionType: "set_auto_combat",
+                            companion: a.companion,
+                            enabled: a.enabled,
+                        }));
+
+                    case "stardew_eat_item":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(sendAction({
+                            actionType: "eat_item",
+                            companion: a.companion,
+                            ...(a.slot != null ? { slot: a.slot } : {}),
+                        }));
 
                     default:
-                        return { content: [{ type: "text", text: `Unknown tool: ${name}` }] };
+                        return err(`Unknown tool: ${name}`);
                 }
             } catch (error: any) {
-                return { content: [{ type: "text", text: `Error: ${error.message}` }] };
+                return err(error.message);
             }
         });
     }
@@ -246,8 +480,16 @@ class StardewBridgeServer {
     async run() {
         const transport = new StdioServerTransport();
         await this.server.connect(transport);
-        console.error("Stardew MCP Bridge v0.2.0 running on stdio");
+        console.error("Stardew MCP Bridge v0.3.0 running on stdio");
     }
+}
+
+function ok(text: string) {
+    return { content: [{ type: "text" as const, text }] };
+}
+
+function err(text: string) {
+    return { content: [{ type: "text" as const, text: `Error: ${text}` }] };
 }
 
 const server = new StardewBridgeServer();
