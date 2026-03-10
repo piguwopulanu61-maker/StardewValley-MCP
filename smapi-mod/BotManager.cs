@@ -495,8 +495,8 @@ namespace StardewMCPBridge
                             }
                             else
                             {
-                                // Try to check/interact with the object
-                                success = obj.checkForAction(Game1.player);
+                                // Try to check/interact with the object using companion's shadow farmer
+                                success = obj.checkForAction(companion.Shadow);
                                 detail = success ? $"Interacted with {obj.DisplayName}" : $"Can't interact with {obj.DisplayName}";
                             }
                         }
@@ -539,38 +539,25 @@ namespace StardewMCPBridge
 
                         if (food != null)
                         {
-                            companion.Shadow.eatObject(food);
-                            success = true;
-                            detail = $"Ate {food.DisplayName}";
+                            try
+                            {
+                                companion.Shadow.eatObject(food);
+                                success = true;
+                                detail = $"Ate {food.DisplayName}";
+                            }
+                            catch (Exception eatEx)
+                            {
+                                // eatObject may access UI elements on headless farmer
+                                // Fall back to direct stamina/health restoration
+                                companion.Shadow.Stamina = Math.Min(companion.Shadow.MaxStamina, companion.Shadow.Stamina + food.Edibility);
+                                companion.Shadow.health = Math.Min(companion.Shadow.maxHealth, companion.Shadow.health + (int)(food.Edibility * 0.4f));
+                                success = true;
+                                detail = $"Ate {food.DisplayName} (manual restore, eatObject failed: {eatEx.Message})";
+                            }
                         }
                         else
                         {
                             detail = "No edible items in inventory";
-                        }
-                        break;
-                    }
-
-                    // --- Observation (on-demand scan) ---
-                    case "get_surroundings":
-                    {
-                        int radius = root.TryGetProperty("radius", out var rProp) ? rProp.GetInt32() : 8;
-                        var scan = companion.GetSurroundings(radius);
-                        success = scan != null;
-                        detail = success ? $"Scanned {scan.Tiles.Count} tiles, {scan.Monsters.Count} monsters, {scan.Npcs.Count} NPCs" : "No location";
-                        if (scan != null)
-                        {
-                            this.commandResults[companionName] = new
-                            {
-                                action, success, detail,
-                                surroundings = new
-                                {
-                                    tiles = scan.Tiles,
-                                    monsters = scan.Monsters,
-                                    npcs = scan.Npcs
-                                }
-                            };
-                            this.monitor.Log($"{companionName}: {detail}", LogLevel.Debug);
-                            return;
                         }
                         break;
                     }

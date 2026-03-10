@@ -16,6 +16,8 @@ namespace StardewMCPBridge
     /// </summary>
     public static class SurroundingsScanner
     {
+        private static readonly HashSet<string> CompanionNames = new HashSet<string> { "Companion1", "Companion2" };
+
         /// <summary>Scan tiles around a position and return structured data for the bridge.</summary>
         public static ScanResult Scan(GameLocation location, Vector2 centerTile, int radius = 8)
         {
@@ -61,9 +63,8 @@ namespace StardewMCPBridge
                             MaxHealth = monster.MaxHealth
                         });
                     }
-                    else
+                    else if (!CompanionNames.Contains(character.Name))
                     {
-                        // Skip our own companion NPCs from the NPC list
                         result.Npcs.Add(new NpcInfo
                         {
                             Name = character.Name,
@@ -82,7 +83,7 @@ namespace StardewMCPBridge
             int x = (int)tile.X;
             int y = (int)tile.Y;
 
-            bool passable = location.isTilePassable(new xTile.Dimensions.Location(x * 64, y * 64), Game1.viewport);
+            bool passable = location.isTilePassable(new xTile.Dimensions.Location(x, y), Game1.viewport);
             bool isWater = location.isWaterTile(x, y);
 
             string terrainType = null;
@@ -109,7 +110,7 @@ namespace StardewMCPBridge
                         cropReady = dirt.readyForHarvest();
                     }
                 }
-                else if (feature is Tree tree)
+                else if (feature is Tree)
                 {
                     terrainType = "tree";
                 }

@@ -60,6 +60,15 @@ namespace StardewMCPBridge
             // Always keep shadow farmer in sync with visible NPC
             this.Companion.SyncFromNpc();
 
+            // Player mode needs to tick every frame (fishing rod, auto-combat)
+            // regardless of action cooldown
+            if (this.Mode == CompanionMode.Player)
+            {
+                if (this.actionCooldown > 0) this.actionCooldown--;
+                this.DoPlayerMode();
+                return;
+            }
+
             if (this.actionCooldown > 0) { this.actionCooldown--; return; }
 
             switch (this.Mode)
@@ -78,10 +87,7 @@ namespace StardewMCPBridge
                     break;
                 case CompanionMode.Idle:
                     break;
-                case CompanionMode.Player:
-                    // Direct MCP control — only sync position, no autonomous behavior
-                    this.DoPlayerMode();
-                    break;
+                // Player mode handled above (needs to tick every frame)
             }
         }
 

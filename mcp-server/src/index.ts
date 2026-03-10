@@ -43,6 +43,21 @@ function getCompanionState(companionName: string): string {
     }
 }
 
+function getCompanionInventory(companionName: string): string {
+    const raw = readBridge();
+    try {
+        const data = JSON.parse(raw);
+        if (data.companions) {
+            const companion = (data.companions as any[]).find((c: any) => c.name === companionName);
+            if (companion?.inventory) return JSON.stringify(companion.inventory, null, 2);
+            if (companion) return `Companion "${companionName}" has no inventory data (is it in player mode?).`;
+        }
+        return `Companion "${companionName}" not found in bridge data.`;
+    } catch {
+        return raw;
+    }
+}
+
 const COMPANION_ENUM = ["Companion1", "Companion2"];
 const MODE_ENUM = ["follow", "farm", "mine", "fish", "idle", "player"];
 const TOOL_ENUM = ["pickaxe", "axe", "hoe", "watering_can", "sword"];
@@ -375,16 +390,12 @@ class StardewBridgeServer {
                     // --- Player mode: companion-targeted commands ---
                     case "stardew_get_surroundings":
                         if (!a.companion) return err("companion is required.");
-                        return ok(sendAction({
-                            actionType: "get_surroundings",
-                            companion: a.companion,
-                            radius: a.radius || 8,
-                        }));
+                        // Surroundings are included in bridge data when companion is in player mode
+                        return ok(getCompanionState(a.companion));
 
                     case "stardew_get_inventory":
                         if (!a.companion) return err("companion is required.");
-                        // Read directly from bridge data
-                        return ok(getCompanionState(a.companion));
+                        return ok(getCompanionInventory(a.companion));
 
                     case "stardew_get_companion_state":
                         if (!a.companion) return err("companion is required.");
