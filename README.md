@@ -148,6 +148,19 @@ stardew-mcp-bridge/
 ```
 
 
+## Notes (v0.2.0)
+
+Recent fixes and improvements:
+
+- **Farm mode freeze fix** — Companions no longer get permanently stuck when pathfinding stalls. Stuck detection (2s threshold) auto-retargets to the next task.
+- **Mine mode ladder descent** — Companions actually descend mine levels now instead of just standing near ladders.
+- **Fishing timeout** — Fishing no longer hangs forever on a bad cast. Auto-resets after ~5 seconds with no bite.
+- **Crash isolation** — One companion crashing no longer freezes all companions. Each ticks independently with error recovery.
+- **Shadow farmer sync** — Shadow farmer syncs position from the visible NPC every tick, preventing desync drift.
+- **Day transition safety** — Companions in mines/dungeons at day end are warped to the farm. Mode resets to Follow on new day.
+- **Atomic file writes** — MCP server writes actions to a temp file then renames, preventing the SMAPI mod from reading partial JSON.
+- **Input validation** — MCP tools with required arguments now validate before sending, returning clear error messages.
+
 ## License
 
 MIT

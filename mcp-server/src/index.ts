@@ -14,7 +14,10 @@ const ACTION_PATH = process.env.STARDEW_ACTION_PATH
     || path.resolve(__dirname, "../../smapi-mod/actions.json");
 
 function sendAction(action: object): string {
-    fs.writeFileSync(ACTION_PATH, JSON.stringify(action));
+    // Atomic write: write to temp file then rename to prevent partial reads
+    const tmpPath = ACTION_PATH + ".tmp";
+    fs.writeFileSync(tmpPath, JSON.stringify(action));
+    fs.renameSync(tmpPath, ACTION_PATH);
     return "Command sent.";
 }
 
@@ -203,25 +206,33 @@ class StardewBridgeServer {
                     case "stardew_fish":
                         return { content: [{ type: "text", text: sendAction({ actionType: "fish" }) }] };
 
-                    case "stardew_warp":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "warp", ...(args as object) }) }] };
+                    case "stardew_warp": {
+                        const a = args as any;
+                        if (!a?.location || a?.x == null || a?.y == null)
+                            return { content: [{ type: "text", text: "Error: location, x, and y are required." }] };
+                        return { content: [{ type: "text", text: sendAction({ actionType: "warp", location: a.location, x: a.x, y: a.y }) }] };
+                    }
 
-                    case "stardew_set_mode":
-                        return { content: [{ type: "text", text: sendAction({ actionType: "set_mode", ...(args as object) }) }] };
+                    case "stardew_set_mode": {
+                        const a = args as any;
+                        if (!a?.target || !a?.mode)
+                            return { content: [{ type: "text", text: "Error: target and mode are required." }] };
+                        return { content: [{ type: "text", text: sendAction({ actionType: "set_mode", target: a.target, mode: a.mode }) }] };
+                    }
 
-                    case "stardew_chat":
-                        return {
-                            content: [{
-                                type: "text",
-                                text: sendAction({
-                                    actionType: "chat",
-                                    metadata: { message: (args as any)?.message || "" }
-                                })
-                            }]
-                        };
+                    case "stardew_chat": {
+                        const a = args as any;
+                        if (!a?.message)
+                            return { content: [{ type: "text", text: "Error: message is required." }] };
+                        return { content: [{ type: "text", text: sendAction({ actionType: "chat", metadata: { message: a.message } }) }] };
+                    }
 
-                    case "stardew_action":
-                        return { content: [{ type: "text", text: sendAction(args as object) }] };
+                    case "stardew_action": {
+                        const a = args as any;
+                        if (!a?.actionType)
+                            return { content: [{ type: "text", text: "Error: actionType is required." }] };
+                        return { content: [{ type: "text", text: sendAction(a) }] };
+                    }
 
                     default:
                         return { content: [{ type: "text", text: `Unknown tool: ${name}` }] };

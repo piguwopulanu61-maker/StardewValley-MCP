@@ -28,6 +28,18 @@ namespace StardewMCPBridge
 
             try
             {
+                // Remove any game-auto-created NPCs with this name from ALL locations
+                // (Data/Characters injection causes the game to auto-spawn them)
+                foreach (var loc in Game1.locations)
+                {
+                    var dupes = loc.characters.Where(c => c.Name == name).ToList();
+                    foreach (var dupe in dupes)
+                    {
+                        loc.characters.Remove(dupe);
+                        this.monitor.Log($"Removed duplicate {name} from {loc.Name}", LogLevel.Debug);
+                    }
+                }
+
                 var portrait = this.helper.ModContent.Load<Microsoft.Xna.Framework.Graphics.Texture2D>($"assets/{name}_portrait.png");
 
                 var spawnPos = Game1.player.Position;
@@ -42,6 +54,7 @@ namespace StardewMCPBridge
                 );
                 botNpc.displayName = name;
                 Game1.player.currentLocation.addCharacter(botNpc);
+                this.monitor.Log($"{name} placed at pixel ({spawnPos.X},{spawnPos.Y}), tile ({spawnPos.X/64f:F1},{spawnPos.Y/64f:F1})", LogLevel.Info);
 
                 var companionFarmer = new CompanionFarmer(botNpc, name, this.monitor, this.helper);
                 var ai = new CompanionAI(companionFarmer, this.monitor);
@@ -58,8 +71,17 @@ namespace StardewMCPBridge
 
         public void Update()
         {
-            foreach (var ai in this.companions.Values)
-                ai.Tick();
+            foreach (var kvp in this.companions)
+            {
+                try
+                {
+                    kvp.Value.Tick();
+                }
+                catch (Exception ex)
+                {
+                    this.monitor.Log($"{kvp.Key}: AI tick error (recovering): {ex.Message}", LogLevel.Error);
+                }
+            }
         }
 
         public object GetBotStatus()
@@ -80,6 +102,50 @@ namespace StardewMCPBridge
             }
             return statuses;
         }
+
+        // ======================
+        // DAY TRANSITION
+        // ======================
+
+        /// <summary>Restore companion stamina on new day; reset state.</summary>
+        public void OnDayStarted()
+        {
+            foreach (var kvp in this.companions)
+            {
+                var ai = kvp.Value;
+                var shadow = ai.Companion.Shadow;
+                shadow.WakeUp();
+
+                // Reset AI state for fresh day
+                ai.Mode = CompanionMode.Follow;
+
+                // If companion was in a mine/dungeon, warp to farm
+                var loc = ai.Companion.Visual.currentLocation;
+                if (loc is StardewValley.Locations.MineShaft || loc?.Name == "VolcanoDungeon")
+                {
+                    ai.Companion.WarpTo("Farm", 64, 15);
+                    this.monitor.Log($"{kvp.Key}: Was in {loc.Name} at day end — warped to Farm", LogLevel.Info);
+                }
+
+                this.monitor.Log($"{kvp.Key}: New day — stamina restored, mode reset to Follow", LogLevel.Info);
+            }
+        }
+
+        /// <summary>Clean up companions on return to title.</summary>
+        public void Cleanup()
+        {
+            foreach (var kvp in this.companions)
+            {
+                var npc = kvp.Value.Companion.Visual;
+                npc.currentLocation?.characters.Remove(npc);
+            }
+            this.companions.Clear();
+            this.monitor.Log("All companions cleaned up", LogLevel.Info);
+        }
+
+        // ======================
+        // ACTION PROCESSING
+        // ======================
 
         public void ProcessAction(string json)
         {

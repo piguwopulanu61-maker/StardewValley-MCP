@@ -37,6 +37,7 @@ namespace StardewMCPBridge
         private int pathCooldown = 0;
         private Vector2? currentTarget = null;
         private bool isFishing = false;
+        private int fishingWaitTicks = 0;
         private int stuckTicks = 0;
         private Vector2 lastPosition = Vector2.Zero;
 
@@ -51,6 +52,10 @@ namespace StardewMCPBridge
         public void Tick()
         {
             if (!Context.IsWorldReady) return;
+
+            // Always keep shadow farmer in sync with visible NPC
+            this.Companion.SyncFromNpc();
+
             if (this.actionCooldown > 0) { this.actionCooldown--; return; }
 
             switch (this.Mode)
@@ -131,7 +136,8 @@ namespace StardewMCPBridge
         private void DoFarm()
         {
             this.WarpToPlayerIfNeeded();
-            var location = this.npc.currentLocation ?? Game1.player.currentLocation;
+            var location = this.npc.currentLocation ?? Game1.player?.currentLocation;
+            if (location == null) return;
 
             // If we have a target, walk to it
             if (this.currentTarget.HasValue)
@@ -154,7 +160,7 @@ namespace StardewMCPBridge
                     this.stuckTicks = 0;
                 this.lastPosition = this.npc.Position;
 
-                if (this.stuckTicks > 60)
+                if (this.stuckTicks > 120)
                 {
                     this.monitor.Log($"{this.Companion.Name}: Stuck heading to ({this.currentTarget.Value.X},{this.currentTarget.Value.Y}), retargeting", LogLevel.Debug);
                     this.currentTarget = null;
@@ -219,7 +225,8 @@ namespace StardewMCPBridge
         private void DoMine()
         {
             this.Companion.SyncFromNpc();
-            var location = this.npc.currentLocation ?? Game1.player.currentLocation;
+            var location = this.npc.currentLocation ?? Game1.player?.currentLocation;
+            if (location == null) return;
 
             // Priority 1: Fight nearby monsters
             var monster = this.Companion.FindNearestMonster(192f);
@@ -267,7 +274,30 @@ namespace StardewMCPBridge
                     float dist = Vector2.Distance(this.npc.Tile, pair.Key);
                     if (dist <= 1.5f)
                     {
-                        this.monitor.Log($"{this.Companion.Name}: Found ladder at ({pair.Key.X},{pair.Key.Y})", LogLevel.Info);
+                        // Descend: warp companion to next mine level
+                        if (location is MineShaft shaft)
+                        {
+                            int nextLevel = shaft.mineLevel + 1;
+                            string nextName = "UndergroundMine" + nextLevel;
+                            var nextLocation = Game1.getLocationFromName(nextName);
+                            if (nextLocation == null)
+                            {
+                                nextLocation = MineShaft.GetMine(nextName);
+                            }
+                            if (nextLocation != null)
+                            {
+                                this.Companion.WarpTo(nextLocation.Name, 6, 6);
+                                this.monitor.Log($"{this.Companion.Name}: Descended to mine level {nextLevel}", LogLevel.Info);
+                            }
+                            else
+                            {
+                                this.monitor.Log($"{this.Companion.Name}: Can't find mine level {nextLevel}", LogLevel.Warn);
+                            }
+                        }
+                        else
+                        {
+                            this.monitor.Log($"{this.Companion.Name}: Found ladder at ({pair.Key.X},{pair.Key.Y}) but not in a mine shaft", LogLevel.Debug);
+                        }
                     }
                     else
                     {
@@ -295,7 +325,20 @@ namespace StardewMCPBridge
                 if (this.Companion.CheckAndHookFish())
                 {
                     this.isFishing = false;
+                    this.fishingWaitTicks = 0;
                     this.actionCooldown = 60; // wait a bit after catching
+                }
+                else
+                {
+                    this.fishingWaitTicks++;
+                    // Timeout after ~5 seconds (300 ticks) with no bite — reel in and retarget
+                    if (this.fishingWaitTicks > 300)
+                    {
+                        this.monitor.Log($"{this.Companion.Name}: Fishing timeout, retargeting", LogLevel.Debug);
+                        this.isFishing = false;
+                        this.fishingWaitTicks = 0;
+                        this.actionCooldown = 30;
+                    }
                 }
                 return;
             }
