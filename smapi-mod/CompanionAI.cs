@@ -126,6 +126,8 @@ namespace StardewMCPBridge
         // FOLLOW MODE
         // ====================
 
+        private Vector2 lastPlayerTile = Vector2.Zero;
+
         private void DoFollow()
         {
             this.WarpToPlayerIfNeeded();
@@ -145,6 +147,18 @@ namespace StardewMCPBridge
                 return;
             }
 
+            // Too close — step aside so we don't block the player
+            if (distance < 1.5f)
+            {
+                if (this.npc.controller != null)
+                    this.npc.controller = null;
+                var stepOffset = this.GetPositionOffset();
+                this.npc.Position = Game1.player.Position + stepOffset;
+                this.Companion.SyncFromNpc();
+                this.lastPlayerTile = playerPos;
+                return;
+            }
+
             // Close enough — stop pathfinding and idle
             if (distance <= 3)
             {
@@ -152,12 +166,19 @@ namespace StardewMCPBridge
                 {
                     this.npc.controller = null;
                 }
-                // Don't do anything else, just stand near the player
+                this.lastPlayerTile = playerPos;
                 return;
             }
 
+            // If player moved 2+ tiles since we last pathed, our path is stale
+            if (this.npc.controller != null &&
+                Vector2.Distance(playerPos, this.lastPlayerTile) >= 2f)
+            {
+                this.npc.controller = null;
+                this.pathCooldown = 0;
+            }
+
             // Distance is 3-10 tiles — need to pathfind
-            // ONLY create new controller if we don't already have an active one
             if (this.npc.controller == null && this.pathCooldown <= 0)
             {
                 try
@@ -167,7 +188,8 @@ namespace StardewMCPBridge
                     this.npc.controller = new PathFindController(
                         this.npc, this.npc.currentLocation,
                         targetPoint, 2);
-                    this.pathCooldown = 30; // Wait longer before recalculating path
+                    this.pathCooldown = 30;
+                    this.lastPlayerTile = playerPos;
                 }
                 catch
                 {
@@ -177,6 +199,7 @@ namespace StardewMCPBridge
                     this.npc.controller = null;
                     this.Companion.SyncFromNpc();
                     this.pathCooldown = 30;
+                    this.lastPlayerTile = playerPos;
                 }
             }
 
@@ -302,10 +325,20 @@ namespace StardewMCPBridge
                 }
             }
 
-            // Use tools for debris so loot drops properly (stone→pickaxe, twigs/weeds→axe)
+            // Use tools for debris so loot drops properly (stone->pickaxe, twigs/weeds->axe)
+            // Verify the tile STILL has debris — don't swing if it was removed or replaced
             if (location.objects.TryGetValue(tile, out var obj) && obj.Name != null)
             {
-                if (obj.Name.Contains("Stone"))
+                string oname = obj.Name;
+                bool isDebris = oname.Contains("Stone") || oname.Contains("Weed") || oname.Contains("Twig")
+                    || obj.ParentSheetIndex == 294 || obj.ParentSheetIndex == 295
+                    || obj.ParentSheetIndex == 343 || obj.ParentSheetIndex == 450;
+                if (!isDebris)
+                {
+                    this.monitor.Log($"{this.Companion.Name}: Skipping tool use — tile no longer has debris (found {oname})", LogLevel.Debug);
+                    return;
+                }
+                if (oname.Contains("Stone"))
                     this.Companion.UseToolAt(tile, typeof(Pickaxe));
                 else
                     this.Companion.UseToolAt(tile, typeof(Axe));
