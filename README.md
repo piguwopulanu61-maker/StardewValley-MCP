@@ -232,6 +232,25 @@ stardew-mcp-bridge/
 
 - Removed `Game1.otherFarmers` registration — `BotFarmer`'s `NetFields` are not fully initialized, causing `Multiplayer.updateRoots()` to throw `NullReferenceException`. The companion system works without network registration.
 
+### Follow mode polish (CompanionAI.cs)
+
+- Tracks the player's last tile; when the player moves 2+ tiles, stale paths are invalidated immediately and a fresh one is built
+- Farm mode verifies the target tile still contains debris before swinging a tool, so companions don't hit chests/sprinklers/crops that replaced the debris after a path was planned
+
+### Dynamic companion count (BotManager.cs, ModEntry.cs, SurroundingsScanner.cs)
+
+- `stardew_spawn` now accepts a `count` parameter (default 2, clamped 1–20)
+- Position offsets are derived from each companion's index instead of hardcoded name checks, so arbitrary `CompanionN` names just work
+- Asset loading scans the `assets/` folder for any `*_portrait.png` / `*_sprite.png` and falls back to `Companion1`'s textures when a per-companion asset is missing
+- `Data/Characters` injection is driven by a runtime `RegisteredCompanions` set, updated on spawn
+
+### Player 2-style farmer rendering (BotFarmer.cs, CompanionNpc.cs, CompanionFarmer.cs)
+
+- `BotFarmer` is initialized with a `FarmerSprite` and a randomized appearance (skin, hair, gender, shirt, hair/pants/eye colors)
+- New `CompanionNpc` subclass renders the paired `Farmer` instead of a static sprite; walk animation is driven from per-frame position deltas
+- Companions now look like customizable farmers (Player 2/3-style) rather than a single-pose NPC
+- New MCP tool `stardew_set_appearance` lets the agent dynamically change a companion's skin / hair / shirt / gender and each color channel at runtime
+
 ## License
 
 MIT
