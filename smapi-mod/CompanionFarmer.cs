@@ -51,17 +51,18 @@ namespace StardewMCPBridge
 
             this.SyncFromNpc();
 
-            // Register in otherFarmers for location activation + game mechanics
-            Game1.otherFarmers[this.Shadow.UniqueMultiplayerID] = this.Shadow;
+            // NOTE: Do NOT register in Game1.otherFarmers - it causes Multiplayer.updateRoots() 
+            // to crash with NullReferenceException because BotFarmer's NetFields aren't fully initialized.
+            // The companion system works fine without network registration.
 
-            this.monitor.Log($"Shadow farmer created for {name} (UID: {this.Shadow.UniqueMultiplayerID}, registered in otherFarmers)", LogLevel.Info);
+            this.monitor.Log($"Shadow farmer created for {name} (UID: {this.Shadow.UniqueMultiplayerID})", LogLevel.Info);
         }
 
-        /// <summary>Unregister from otherFarmers on cleanup.</summary>
+        /// <summary>Cleanup on removal (no-op since we don't register in otherFarmers).</summary>
         public void Unregister()
         {
-            Game1.otherFarmers.Remove(this.Shadow.UniqueMultiplayerID);
-            this.monitor.Log($"Shadow farmer {this.Name} unregistered from otherFarmers", LogLevel.Info);
+            // No-op: we no longer register in otherFarmers
+            this.monitor.Log($"Shadow farmer {this.Name} cleanup complete", LogLevel.Info);
         }
 
         /// <summary>Sync shadow farmer position/location from the visible NPC.</summary>

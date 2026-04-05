@@ -60,6 +60,9 @@ namespace StardewMCPBridge
             // Always keep shadow farmer in sync with visible NPC
             this.Companion.SyncFromNpc();
 
+            // Decrement path cooldown every tick (shared across all modes)
+            if (this.pathCooldown > 0) this.pathCooldown--;
+
             // Player mode needs to tick every frame (fishing rod, auto-combat)
             // regardless of action cooldown
             if (this.Mode == CompanionMode.Player)
@@ -114,7 +117,20 @@ namespace StardewMCPBridge
                 return;
             }
 
-            if (distance > 3 && this.pathCooldown <= 0)
+            // Close enough — stop pathfinding and idle
+            if (distance <= 3)
+            {
+                if (this.npc.controller != null)
+                {
+                    this.npc.controller = null;
+                }
+                // Don't do anything else, just stand near the player
+                return;
+            }
+
+            // Distance is 3-10 tiles — need to pathfind
+            // ONLY create new controller if we don't already have an active one
+            if (this.npc.controller == null && this.pathCooldown <= 0)
             {
                 try
                 {
@@ -123,7 +139,7 @@ namespace StardewMCPBridge
                     this.npc.controller = new PathFindController(
                         this.npc, this.npc.currentLocation,
                         targetPoint, 2);
-                    this.pathCooldown = 4;
+                    this.pathCooldown = 30; // Wait longer before recalculating path
                 }
                 catch
                 {
@@ -132,11 +148,9 @@ namespace StardewMCPBridge
                     this.npc.Position = Game1.player.Position + offset;
                     this.npc.controller = null;
                     this.Companion.SyncFromNpc();
-                    this.pathCooldown = 4;
+                    this.pathCooldown = 30;
                 }
             }
-
-            if (this.pathCooldown > 0) this.pathCooldown--;
 
             // In combat areas, fight while following
             if (this.IsInCombatArea())
@@ -157,11 +171,14 @@ namespace StardewMCPBridge
             if (this.currentTarget.HasValue)
             {
                 float dist = Vector2.Distance(this.npc.Tile, this.currentTarget.Value);
+                
+                // Arrived at target
                 if (dist <= 1.5f)
                 {
                     // Execute the task at this tile
                     this.ExecuteFarmAction(location, this.currentTarget.Value);
                     this.currentTarget = null;
+                    this.npc.controller = null;
                     this.stuckTicks = 0;
                     this.actionCooldown = 15; // brief pause between actions
                     return;
@@ -184,6 +201,25 @@ namespace StardewMCPBridge
                 }
                 else
                 {
+                    // If we have a target but no active controller, rebuild path or teleport
+                    if (this.npc.controller == null && this.pathCooldown <= 0)
+                    {
+                        try
+                        {
+                            this.npc.controller = new PathFindController(
+                                this.npc, location,
+                                new Point((int)this.currentTarget.Value.X, (int)this.currentTarget.Value.Y), 2);
+                            this.pathCooldown = 30;
+                        }
+                        catch
+                        {
+                            // Pathfinding failed — teleport to target
+                            this.npc.Position = this.currentTarget.Value * 64f;
+                            this.npc.controller = null;
+                            this.Companion.SyncFromNpc();
+                            this.pathCooldown = 30;
+                        }
+                    }
                     return;
                 }
             }
@@ -197,18 +233,26 @@ namespace StardewMCPBridge
             var nearest = tasks.OrderByDescending(t => t.Priority)
                 .ThenBy(t => Vector2.Distance(myTile, t.Tile)).First();
             this.currentTarget = nearest.Tile;
+            this.stuckTicks = 0;
 
-            // Path to it
-            try
+            // Path to it (only if cooldown allows)
+            if (this.pathCooldown <= 0)
             {
-                this.npc.controller = new PathFindController(
-                    this.npc, location,
-                    new Point((int)nearest.Tile.X, (int)nearest.Tile.Y), 2);
-            }
-            catch
-            {
-                // If pathfinding fails, teleport near
-                this.npc.Position = nearest.Tile * 64f;
+                try
+                {
+                    this.npc.controller = new PathFindController(
+                        this.npc, location,
+                        new Point((int)nearest.Tile.X, (int)nearest.Tile.Y), 2);
+                    this.pathCooldown = 30;
+                }
+                catch
+                {
+                    // If pathfinding fails, teleport near
+                    this.npc.Position = nearest.Tile * 64f;
+                    this.npc.controller = null;
+                    this.Companion.SyncFromNpc();
+                    this.pathCooldown = 30;
+                }
             }
         }
 
@@ -486,19 +530,21 @@ namespace StardewMCPBridge
 
         private void PathTo(Point target)
         {
-            if (this.pathCooldown > 0) { this.pathCooldown--; return; }
+            // Only create new path if we don't have an active one AND cooldown allows
+            if (this.npc.controller != null) return;
+            if (this.pathCooldown > 0) return;
 
             try
             {
                 var location = this.npc.currentLocation ?? Game1.currentLocation;
                 this.npc.controller = new PathFindController(this.npc, location, target, 2);
-                this.pathCooldown = 4;
+                this.pathCooldown = 30;
             }
             catch
             {
                 // Pathfinding failed — teleport to target
                 this.npc.Position = new Vector2(target.X * 64f, target.Y * 64f);
-                this.pathCooldown = 4;
+                this.pathCooldown = 30;
             }
         }
 

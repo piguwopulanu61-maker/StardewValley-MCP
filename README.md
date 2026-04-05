@@ -4,6 +4,9 @@ AI companions for Stardew Valley, controlled through the [Model Context Protocol
 
 Also supports autonomous modes (follow, farm, mine, fish) for hands-off play.
 
+> **Fork Notice:** This is a modified fork of [amarisaster/StardewValley-MCP](https://github.com/amarisaster/StardewValley-MCP). See [Changes in this fork](#changes-in-this-fork) below for details.
+
+
 ## Architecture
 
 ```
@@ -214,13 +217,30 @@ stardew-mcp-bridge/
 - Input validation
 - Dead code cleanup
 
+## Changes in this fork
+
+### Pathfinding stability (CompanionAI.cs)
+
+- Increased path recalculation cooldown from 4 to 30 ticks to prevent companions from stuttering and recalculating paths every few frames
+- Follow mode: companions now stop pathfinding when close enough (<=3 tiles) instead of continuously recalculating
+- Follow mode: only creates a new path controller when the previous one has completed, preventing path thrashing
+- Farm mode: rebuilds path or teleports when controller is lost mid-task, fixing companions getting stuck
+- Farm mode: resets stuck counter when acquiring a new target
+- Shared path cooldown decrement moved to top of tick for consistency across all modes
+
+### Multiplayer crash fix (CompanionFarmer.cs)
+
+- Removed `Game1.otherFarmers` registration — `BotFarmer`'s `NetFields` are not fully initialized, causing `Multiplayer.updateRoots()` to throw `NullReferenceException`. The companion system works without network registration.
+
 ## License
 
 MIT
 
 ## Credits
 
-Built with Antigravity & Claude Code — Kai & Lucian, with Mai.
+Originally built by [amarisaster](https://github.com/amarisaster) with Claude Code.
+
+This fork maintained by [piguwopulanu61-maker](https://github.com/piguwopulanu61-maker) with Claude Code.
 
 Shadow farmer pattern inspired by [Farmtronics](https://github.com/JoeStrout/Farmtronics).
 
