@@ -313,6 +313,15 @@ namespace StardewMCPBridge
                 }
             }
 
+            // Never use the axe if the target tile has a tree, fruit tree, or crop — player's stuff
+            if (location.terrainFeatures.TryGetValue(tile, out var terrain)
+                && (terrain is Tree || terrain is FruitTree
+                    || (terrain is HoeDirt hd && hd.crop != null)))
+            {
+                this.monitor.Log($"{this.Companion.Name}: Skipping — tile has player-planted terrain feature", LogLevel.Debug);
+                return;
+            }
+
             // Use tools for debris so loot drops properly (stone->pickaxe, twigs/weeds->axe)
             // Verify the tile STILL has debris — don't swing if it was removed or replaced
             if (location.objects.TryGetValue(tile, out var obj) && obj.Name != null)

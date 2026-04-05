@@ -592,6 +592,38 @@ namespace StardewMCPBridge
                         break;
                     }
 
+                    case "set_appearance":
+                    {
+                        int? getInt(string key) {
+                            if (!root.TryGetProperty(key, out var el)) return null;
+                            if (el.ValueKind == System.Text.Json.JsonValueKind.Number) return el.GetInt32();
+                            if (el.ValueKind == System.Text.Json.JsonValueKind.String && int.TryParse(el.GetString(), out var v)) return v;
+                            return null;
+                        }
+                        bool? getBool(string key) {
+                            if (!root.TryGetProperty(key, out var el)) return null;
+                            if (el.ValueKind == System.Text.Json.JsonValueKind.True) return true;
+                            if (el.ValueKind == System.Text.Json.JsonValueKind.False) return false;
+                            if (el.ValueKind == System.Text.Json.JsonValueKind.String) return el.GetString() == "true";
+                            return null;
+                        }
+                        int? skin = getInt("skin");
+                        int? hair = getInt("hair");
+                        bool? isMale = getBool("is_male");
+                        int? shirt = getInt("shirt");
+                        int? hcR = getInt("hair_color_r"), hcG = getInt("hair_color_g"), hcB = getInt("hair_color_b");
+                        int? pcR = getInt("pants_color_r"), pcG = getInt("pants_color_g"), pcB = getInt("pants_color_b");
+                        int? ecR = getInt("eye_color_r"), ecG = getInt("eye_color_g"), ecB = getInt("eye_color_b");
+                        this.monitor.Log($"RAW JSON: {root.GetRawText()}", StardewModdingAPI.LogLevel.Info);
+                        if (root.TryGetProperty("hair", out var diag)) this.monitor.Log($"hair property kind={diag.ValueKind}, raw={diag.GetRawText()}", StardewModdingAPI.LogLevel.Info);
+                        this.monitor.Log($"BEFORE SetAppearance: hair={companion.Shadow.hair.Value}, hairColor={companion.Shadow.hairstyleColor.Value}", StardewModdingAPI.LogLevel.Info);
+                        companion.Shadow.SetAppearance(skin, hair, isMale, shirt, hcR, hcG, hcB, pcR, pcG, pcB, ecR, ecG, ecB);
+                        this.monitor.Log($"AFTER SetAppearance: hair={companion.Shadow.hair.Value}, hairColor={companion.Shadow.hairstyleColor.Value}, requestedHair={hair}, requestedR={hcR}", StardewModdingAPI.LogLevel.Info);
+                        success = true;
+                        detail = "Appearance updated";
+                        break;
+                    }
+
                     default:
                         detail = $"Unknown companion command: {action}";
                         this.monitor.Log($"{companionName}: {detail}", LogLevel.Warn);

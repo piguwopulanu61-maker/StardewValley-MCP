@@ -21,20 +21,41 @@ namespace StardewMCPBridge
         /// </summary>
         public void Initialize(string name, bool isMale = true)
         {
-            this.FarmerSprite = new FarmerSprite("Characters\Farmer\farmer_base");
+            this.FarmerSprite = new FarmerSprite(@"Characters\Farmer\farmer_base");
 
-            this.IsMale = isMale;
+            this.Gender = isMale ? Gender.Male : Gender.Female;
             this.skin.Set(rng.Next(0, 6));
             this.hair.Set(rng.Next(0, 16));
-            this.eyes.Set(rng.Next(0, 4));
 
             this.hairstyleColor.Set(RandomColor());
             this.pantsColor.Set(RandomColor());
             this.newEyeColor.Set(RandomColor());
 
-            this.shirt.Set(rng.Next(0, 112));
+            this.shirtItem.Value = null;
+            this.shirt.Set(rng.Next(1000, 1112).ToString());
 
             this.FacingDirection = 2;
+        }
+
+        /// <summary>Set specific appearance values. Null means keep current.</summary>
+        public void SetAppearance(int? skin, int? hair, bool? isMale, int? shirt,
+            int? hairColorR, int? hairColorG, int? hairColorB,
+            int? pantsColorR, int? pantsColorG, int? pantsColorB,
+            int? eyeColorR, int? eyeColorG, int? eyeColorB)
+        {
+            if (isMale.HasValue) this.Gender = isMale.Value ? Gender.Male : Gender.Female;
+            if (skin.HasValue) this.skin.Value = skin.Value;
+            if (hair.HasValue) this.hair.Value = hair.Value;
+            if (shirt.HasValue) { this.shirtItem.Value = null; this.shirt.Value = shirt.Value.ToString(); }
+            if (hairColorR.HasValue && hairColorG.HasValue && hairColorB.HasValue)
+                this.hairstyleColor.Value = new Color(hairColorR.Value, hairColorG.Value, hairColorB.Value);
+            if (pantsColorR.HasValue && pantsColorG.HasValue && pantsColorB.HasValue)
+                this.pantsColor.Value = new Color(pantsColorR.Value, pantsColorG.Value, pantsColorB.Value);
+            if (eyeColorR.HasValue && eyeColorG.HasValue && eyeColorB.HasValue)
+                this.newEyeColor.Value = new Color(eyeColorR.Value, eyeColorG.Value, eyeColorB.Value);
+
+            // Force the renderer to rebuild the recolored sprite sheet
+            this.FarmerRenderer?.MarkSpriteDirty();
         }
 
         private static Color RandomColor()

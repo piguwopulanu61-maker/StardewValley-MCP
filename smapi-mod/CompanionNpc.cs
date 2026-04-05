@@ -57,8 +57,10 @@ namespace StardewMCPBridge
             }
             else
             {
-                // Idle frame when not moving
-                this.FarmerBody.FarmerSprite.setCurrentFrame(this.FacingDirection * 4);
+                // When idle, face south (towards the camera)
+                this.FacingDirection = 2;
+                this.FarmerBody.FacingDirection = 2;
+                this.FarmerBody.FarmerSprite.setCurrentFrame(0);
                 this.animFrameCounter = 0;
             }
 
