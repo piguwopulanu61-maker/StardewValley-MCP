@@ -363,6 +363,30 @@ class StardewBridgeServer {
                         required: ["companion"],
                     },
                 },
+                {
+                    name: "stardew_set_appearance",
+                    description: "Set a companion's visual appearance: skin, hair, shirt, gender, and colors. All fields optional — only provided fields change.",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            companion: { type: "string", description: "Companion name." },
+                            skin: { type: "number", description: "Skin tone 0-5." },
+                            hair: { type: "number", description: "Hair style 0-73." },
+                            is_male: { type: "boolean", description: "true=male body, false=female body." },
+                            shirt: { type: "number", description: "Shirt ID 1000-1112." },
+                            hair_color_r: { type: "number" },
+                            hair_color_g: { type: "number" },
+                            hair_color_b: { type: "number" },
+                            pants_color_r: { type: "number" },
+                            pants_color_g: { type: "number" },
+                            pants_color_b: { type: "number" },
+                            eye_color_r: { type: "number" },
+                            eye_color_g: { type: "number" },
+                            eye_color_b: { type: "number" },
+                        },
+                        required: ["companion"],
+                    },
+                },
             ],
         }));
 
@@ -510,6 +534,26 @@ class StardewBridgeServer {
                             actionType: "eat_item",
                             companion: a.companion,
                             ...(a.slot != null ? { slot: a.slot } : {}),
+                        }));
+
+                    case "stardew_set_appearance":
+                        if (!a.companion) return err("companion is required.");
+                        return ok(sendAction({
+                            actionType: "set_appearance",
+                            companion: a.companion,
+                            ...(a.skin != null ? { skin: a.skin } : {}),
+                            ...(a.hair != null ? { hair: a.hair } : {}),
+                            ...(a.is_male != null ? { is_male: a.is_male } : {}),
+                            ...(a.shirt != null ? { shirt: a.shirt } : {}),
+                            ...(a.hair_color_r != null ? { hair_color_r: a.hair_color_r } : {}),
+                            ...(a.hair_color_g != null ? { hair_color_g: a.hair_color_g } : {}),
+                            ...(a.hair_color_b != null ? { hair_color_b: a.hair_color_b } : {}),
+                            ...(a.pants_color_r != null ? { pants_color_r: a.pants_color_r } : {}),
+                            ...(a.pants_color_g != null ? { pants_color_g: a.pants_color_g } : {}),
+                            ...(a.pants_color_b != null ? { pants_color_b: a.pants_color_b } : {}),
+                            ...(a.eye_color_r != null ? { eye_color_r: a.eye_color_r } : {}),
+                            ...(a.eye_color_g != null ? { eye_color_g: a.eye_color_g } : {}),
+                            ...(a.eye_color_b != null ? { eye_color_b: a.eye_color_b } : {}),
                         }));
 
                     default:

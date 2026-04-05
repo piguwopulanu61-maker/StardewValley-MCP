@@ -59,7 +59,7 @@ namespace StardewMCPBridge
 
                 var spawnPos = Game1.player.Position + new Vector2(offsetX, 0);
 
-                NPC botNpc = new NPC(
+                NPC botNpc = new CompanionNpc(
                     new AnimatedSprite($"Characters\\{name}", 0, 16, 32),
                     spawnPos,
                     Game1.player.currentLocation.Name,

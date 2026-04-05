@@ -7,18 +7,39 @@ namespace StardewMCPBridge
 {
     /// <summary>
     /// A Farmer subclass that serves as an AI-controlled farmhand.
-    /// Registered in Game1.otherFarmers for location activation + game mechanics.
-    /// Invisible — the paired NPC handles all rendering.
+    /// Renders as a full farmer with randomized appearance (Player 2-style).
     /// </summary>
     public class BotFarmer : Farmer
     {
-        /// <summary>Marks this farmer as AI-controlled (not a real player).</summary>
         public bool IsBot { get; } = true;
 
-        /// <summary>Prevent the shadow farmer from rendering — the NPC sprite is the visual.</summary>
-        public override void draw(SpriteBatch b)
+        private static readonly Random rng = new Random();
+
+        /// <summary>
+        /// Initialize the farmer with sprite, appearance, and basic state.
+        /// Call this after construction and before use.
+        /// </summary>
+        public void Initialize(string name, bool isMale = true)
         {
-            // No-op: companion NPC handles all rendering
+            this.FarmerSprite = new FarmerSprite("Characters\Farmer\farmer_base");
+
+            this.IsMale = isMale;
+            this.skin.Set(rng.Next(0, 6));
+            this.hair.Set(rng.Next(0, 16));
+            this.eyes.Set(rng.Next(0, 4));
+
+            this.hairstyleColor.Set(RandomColor());
+            this.pantsColor.Set(RandomColor());
+            this.newEyeColor.Set(RandomColor());
+
+            this.shirt.Set(rng.Next(0, 112));
+
+            this.FacingDirection = 2;
+        }
+
+        private static Color RandomColor()
+        {
+            return new Color(rng.Next(50, 256), rng.Next(50, 256), rng.Next(50, 256));
         }
 
         public override void SetMovingUp(bool b)
@@ -45,7 +66,6 @@ namespace StardewMCPBridge
             else moveLeft = true;
         }
 
-        // Simplified movement that doesn't reference Game1.player internally
         public new void tryToMoveInDirection(int direction, bool isFarmer, int damagesFarmer, bool glider)
         {
             bool canPass = currentLocation.isTilePassable(nextPosition(direction), Game1.viewport);
@@ -70,7 +90,6 @@ namespace StardewMCPBridge
                 this.FacingDirection = diff.Y > 0 ? 2 : 0;
         }
 
-        /// <summary>Restore farmer state for a new day.</summary>
         public void WakeUp()
         {
             this.isInBed.Value = false;
@@ -79,7 +98,6 @@ namespace StardewMCPBridge
             this.health = this.maxHealth;
         }
 
-        /// <summary>Signal that this bot is ready for sleep/end-of-day. Prevents deadlock.</summary>
         public void SignalSleepReady()
         {
             this.isInBed.Value = true;

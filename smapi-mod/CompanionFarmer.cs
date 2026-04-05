@@ -40,6 +40,14 @@ namespace StardewMCPBridge
             this.Shadow.Stamina = Farmer.startingStamina;
             this.Shadow.MaxItems = 36;
 
+            // Initialize farmer sprite and randomized appearance (Player 2-style rendering)
+            bool isMale = (name.GetHashCode() & 1) == 0;
+            this.Shadow.Initialize(name, isMale);
+
+            // Link the visual NPC to the farmer body for rendering
+            if (visualNpc is CompanionNpc companionNpc)
+                companionNpc.FarmerBody = this.Shadow;
+
             // Give initial tools
             var tools = Farmer.initialTools();
             foreach (var tool in tools)

@@ -147,18 +147,6 @@ namespace StardewMCPBridge
                 return;
             }
 
-            // Too close — step aside so we don't block the player
-            if (distance < 1.5f)
-            {
-                if (this.npc.controller != null)
-                    this.npc.controller = null;
-                var stepOffset = this.GetPositionOffset();
-                this.npc.Position = Game1.player.Position + stepOffset;
-                this.Companion.SyncFromNpc();
-                this.lastPlayerTile = playerPos;
-                return;
-            }
-
             // Close enough — stop pathfinding and idle
             if (distance <= 3)
             {
