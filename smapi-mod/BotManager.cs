@@ -33,6 +33,12 @@ namespace StardewMCPBridge
 
             try
             {
+                // Register companion name for dynamic asset/data injection
+                ModEntry.RegisteredCompanions.Add(name);
+                this.helper.GameContent.InvalidateCache("Data/Characters");
+                this.helper.GameContent.InvalidateCache($"Portraits/{name}");
+                this.helper.GameContent.InvalidateCache($"Characters/{name}");
+
                 // Remove any game-auto-created NPCs with this name from ALL locations
                 // (Data/Characters injection causes the game to auto-spawn them)
                 foreach (var loc in Game1.locations)
@@ -47,9 +53,11 @@ namespace StardewMCPBridge
 
                 var portrait = this.helper.ModContent.Load<Microsoft.Xna.Framework.Graphics.Texture2D>($"assets/{name}_portrait.png");
 
-                var spawnPos = Game1.player.Position;
-                if (name == "Companion2") spawnPos += new Vector2(64, 0);
-                else if (name == "Companion1") spawnPos += new Vector2(-64, 0);
+                // Get the companion index for position offset
+                int index = this.companions.Count;
+                float offsetX = (index % 2 == 0 ? -1 : 1) * ((index / 2 + 1) * 64);
+
+                var spawnPos = Game1.player.Position + new Vector2(offsetX, 0);
 
                 NPC botNpc = new NPC(
                     new AnimatedSprite($"Characters\\{name}", 0, 16, 32),
@@ -253,10 +261,18 @@ namespace StardewMCPBridge
             switch (action)
             {
                 case "spawn":
-                    this.SpawnBot("Companion1", "Guard");
-                    this.SpawnBot("Companion2", "Anchor");
+                    int count = 2;
+                    if (root.TryGetProperty("count", out var countProp))
+                        count = countProp.GetInt32();
+                    count = Math.Max(1, Math.Min(count, 20)); // clamp 1-20
+
+                    for (int i = 1; i <= count; i++)
+                    {
+                        string name = $"Companion{i}";
+                        this.SpawnBot(name, "Companion");
+                    }
                     this.SetAllMode(CompanionMode.Follow);
-                    this.monitor.Log("Spawned and following", LogLevel.Info);
+                    this.monitor.Log($"Spawned {count} companions and following", LogLevel.Info);
                     break;
 
                 case "follow":

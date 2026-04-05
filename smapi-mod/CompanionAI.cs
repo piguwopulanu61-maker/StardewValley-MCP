@@ -52,6 +52,34 @@ namespace StardewMCPBridge
             this.monitor = monitor;
         }
 
+        /// <summary>Get a position offset for this companion based on its index.</summary>
+        private Vector2 GetPositionOffset()
+        {
+            // Extract index from name (Companion1 -> 0, Companion2 -> 1, etc.)
+            int index = 0;
+            string name = this.Companion.Name;
+            if (name.StartsWith("Companion") && int.TryParse(name.Substring("Companion".Length), out int num))
+                index = num - 1;
+
+            // Alternate left/right, increasing distance
+            float direction = (index % 2 == 0) ? -1f : 1f;
+            float distance = (index / 2 + 1) * 64f;
+            return new Vector2(direction * distance, 0);
+        }
+
+        /// <summary>Get a tile offset for pathfinding target near the player.</summary>
+        private int GetTileOffset()
+        {
+            int index = 0;
+            string name = this.Companion.Name;
+            if (name.StartsWith("Companion") && int.TryParse(name.Substring("Companion".Length), out int num))
+                index = num - 1;
+
+            float direction = (index % 2 == 0) ? -1f : 1f;
+            int distance = index / 2 + 1;
+            return (int)(direction * distance);
+        }
+
         /// <summary>Called every tick. Decides and executes behavior based on mode.</summary>
         public void Tick()
         {
@@ -109,7 +137,7 @@ namespace StardewMCPBridge
             // Too far — teleport near player instead of pathfinding
             if (distance > 10)
             {
-                var offset = this.Companion.Name == "Companion2" ? new Vector2(64, 0) : new Vector2(-64, 0);
+                var offset = this.GetPositionOffset();
                 this.npc.Position = Game1.player.Position + offset;
                 this.npc.controller = null;
                 this.Companion.SyncFromNpc();
@@ -134,8 +162,8 @@ namespace StardewMCPBridge
             {
                 try
                 {
-                    var offset = this.Companion.Name == "Companion2" ? 1 : -1;
-                    var targetPoint = new Point((int)playerPos.X + offset, (int)playerPos.Y);
+                    int tileOffset = this.GetTileOffset();
+                    var targetPoint = new Point((int)playerPos.X + tileOffset, (int)playerPos.Y);
                     this.npc.controller = new PathFindController(
                         this.npc, this.npc.currentLocation,
                         targetPoint, 2);
@@ -144,7 +172,7 @@ namespace StardewMCPBridge
                 catch
                 {
                     // Pathfinding failed — teleport close
-                    var offset = this.Companion.Name == "Companion2" ? new Vector2(64, 0) : new Vector2(-64, 0);
+                    var offset = this.GetPositionOffset();
                     this.npc.Position = Game1.player.Position + offset;
                     this.npc.controller = null;
                     this.Companion.SyncFromNpc();
@@ -518,7 +546,7 @@ namespace StardewMCPBridge
                 this.npc.controller = null;
                 this.currentTarget = null;
 
-                var offset = this.Companion.Name == "Companion2" ? new Vector2(64, 0) : new Vector2(-64, 0);
+                var offset = this.GetPositionOffset();
                 this.npc.Position = Game1.player.Position + offset;
                 this.npc.currentLocation = playerLocation;
                 playerLocation.addCharacter(this.npc);

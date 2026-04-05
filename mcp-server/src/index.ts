@@ -28,6 +28,17 @@ function readBridge(): string {
     return '{"error": "Bridge file not found. Is the SMAPI mod running?"}';
 }
 
+/** Get list of currently spawned companion names from bridge data. */
+function getSpawnedCompanions(): string[] {
+    try {
+        const data = JSON.parse(readBridge());
+        if (data.companions && Array.isArray(data.companions)) {
+            return data.companions.map((c: any) => c.name);
+        }
+    } catch {}
+    return [];
+}
+
 // Helper to read companion state from bridge data
 function getCompanionState(companionName: string): string {
     const raw = readBridge();
@@ -77,7 +88,6 @@ function getCompanionInventory(companionName: string): string {
     }
 }
 
-const COMPANION_ENUM = ["Companion1", "Companion2"];
 const MODE_ENUM = ["follow", "farm", "mine", "fish", "idle", "player"];
 const TOOL_ENUM = ["pickaxe", "axe", "hoe", "watering_can", "sword"];
 const DIRECTION_DESC = "0=up, 1=right, 2=down, 3=left";
@@ -89,7 +99,7 @@ class StardewBridgeServer {
         this.server = new Server(
             {
                 name: "stardew-mcp-bridge",
-                version: "0.3.0",
+                version: "0.4.0",
             },
             {
                 capabilities: {
@@ -114,8 +124,13 @@ class StardewBridgeServer {
                 },
                 {
                     name: "stardew_spawn",
-                    description: "Spawn companions into the game world near the player.",
-                    inputSchema: { type: "object", properties: {} },
+                    description: "Spawn companions into the game world near the player. Specify count to control how many (default 2).",
+                    inputSchema: {
+                        type: "object",
+                        properties: {
+                            count: { type: "number", description: "Number of companions to spawn (default 2)." },
+                        },
+                    },
                 },
                 {
                     name: "stardew_follow",
@@ -176,11 +191,11 @@ class StardewBridgeServer {
                 },
                 {
                     name: "stardew_set_mode",
-                    description: "Set a specific companion's mode. Modes: follow, farm, mine, fish, idle, player.",
+                    description: "Set a specific companion's mode. Modes: follow, farm, mine, fish, idle, player. Use companion name like Companion1, Companion2, etc.",
                     inputSchema: {
                         type: "object",
                         properties: {
-                            target: { type: "string", enum: COMPANION_ENUM },
+                            target: { type: "string", description: "Companion name (e.g. Companion1, Companion2, ...)." },
                             mode: { type: "string", enum: MODE_ENUM },
                         },
                         required: ["target", "mode"],
@@ -209,7 +224,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM, description: "Which companion." },
+                            companion: { type: "string", description: "Companion name (e.g. Companion1)." },
                         },
                         required: ["companion"],
                     },
@@ -220,7 +235,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                         },
                         required: ["companion"],
                     },
@@ -231,7 +246,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                         },
                         required: ["companion"],
                     },
@@ -242,7 +257,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             x: { type: "number", description: "Target tile X." },
                             y: { type: "number", description: "Target tile Y." },
                         },
@@ -255,7 +270,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             location: { type: "string", description: "Location name." },
                             x: { type: "number", description: "Tile X." },
                             y: { type: "number", description: "Tile Y." },
@@ -269,7 +284,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             direction: { type: "number", description: DIRECTION_DESC },
                         },
                         required: ["companion", "direction"],
@@ -281,7 +296,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             tool: { type: "string", enum: TOOL_ENUM },
                             x: { type: "number", description: "Target tile X." },
                             y: { type: "number", description: "Target tile Y." },
@@ -295,7 +310,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             x: { type: "number", description: "Target tile X." },
                             y: { type: "number", description: "Target tile Y." },
                         },
@@ -308,7 +323,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                         },
                         required: ["companion"],
                     },
@@ -319,7 +334,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                         },
                         required: ["companion"],
                     },
@@ -330,7 +345,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             enabled: { type: "boolean", description: "true to enable, false to disable." },
                         },
                         required: ["companion", "enabled"],
@@ -342,7 +357,7 @@ class StardewBridgeServer {
                     inputSchema: {
                         type: "object",
                         properties: {
-                            companion: { type: "string", enum: COMPANION_ENUM },
+                            companion: { type: "string", description: "Companion name." },
                             slot: { type: "number", description: "Inventory slot index (optional — picks first edible if omitted)." },
                         },
                         required: ["companion"],
@@ -362,7 +377,7 @@ class StardewBridgeServer {
                         return ok(readBridge());
 
                     case "stardew_spawn":
-                        return ok(sendAction({ actionType: "spawn" }));
+                        return ok(sendAction({ actionType: "spawn", count: a.count ?? 2 }));
 
                     case "stardew_follow":
                         return ok(sendAction({ actionType: "follow" }));
@@ -509,7 +524,7 @@ class StardewBridgeServer {
     async run() {
         const transport = new StdioServerTransport();
         await this.server.connect(transport);
-        console.error("Stardew MCP Bridge v0.3.0 running on stdio");
+        console.error("Stardew MCP Bridge v0.4.0 running on stdio");
     }
 }
 

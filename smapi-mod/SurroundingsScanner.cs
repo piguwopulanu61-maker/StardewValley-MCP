@@ -16,7 +16,7 @@ namespace StardewMCPBridge
     /// </summary>
     public static class SurroundingsScanner
     {
-        private static readonly HashSet<string> CompanionNames = new HashSet<string> { "Companion1", "Companion2" };
+        
 
         /// <summary>Scan tiles around a position and return structured data for the bridge.</summary>
         public static ScanResult Scan(GameLocation location, Vector2 centerTile, int radius = 8)
@@ -63,7 +63,7 @@ namespace StardewMCPBridge
                             MaxHealth = monster.MaxHealth
                         });
                     }
-                    else if (!CompanionNames.Contains(character.Name))
+                    else if (!character.Name.StartsWith("Companion"))
                     {
                         result.Npcs.Add(new NpcInfo
                         {
